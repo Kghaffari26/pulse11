@@ -11,7 +11,6 @@ import { SmartImportDialog } from "@/components/pulse/smart-import-dialog";
 import { ModeSwitch } from "@/components/pulse/mode-switch";
 import { PulseNotifier } from "@/components/pulse/notifications";
 import { computeUrgency, formatDuration } from "@/shared/models/pulse";
-import { GEMINI_ACCOUNT_ID, OPENAI_ACCOUNT_ID } from "@/config/ai-accounts";
 
 function formatWindow(minutes: number): string {
   const total = Math.max(0, Math.round(minutes));
@@ -55,7 +54,7 @@ export default function DashboardPage() {
     );
 
     const needed = active.reduce((acc, t) => acc + Math.max(0, t.estimatedMinutes - t.completedMinutes), 0);
-    // True window to the earliest deadline (no 7-day cap) — overload math must reflect reality.
+    // True window to the earliest deadline (no 7-day cap) \u2014 overload math must reflect reality.
     const earliest = active.reduce<number | null>((min, t) => {
       const mins = Math.max(0, (new Date(t.deadline).getTime() - now.getTime()) / 60000);
       return min === null ? mins : Math.min(min, mins);
@@ -92,7 +91,7 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center gap-2">
           <ModeSwitch />
-          <SmartImportDialog mode={mode} geminiAccountId={GEMINI_ACCOUNT_ID} openaiAccountId={OPENAI_ACCOUNT_ID} />
+          <SmartImportDialog mode={mode} />
           <TaskDialog mode={mode} />
         </div>
       </header>
@@ -114,7 +113,7 @@ export default function DashboardPage() {
         <StatCard
           icon={<CalendarClock className="h-4 w-4" />}
           label="Next deadline"
-          value={stats.total === 0 ? "—" : formatWindow(nextDeadlineWindow)}
+          value={stats.total === 0 ? "\u2014" : formatWindow(nextDeadlineWindow)}
         />
       </div>
 
@@ -151,13 +150,13 @@ export default function DashboardPage() {
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
           {criticalToday.length > 0 ? "Everything else" : "By deadline"}
         </h2>
-        {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
+        {isLoading && <div className="text-sm text-muted-foreground">Loading\u2026</div>}
         {!isLoading && sorted.filter((x) => !criticalToday.includes(x)).length === 0 && (
           <Card className="flex flex-col items-center gap-3 p-8 text-center">
             <p className="text-sm text-muted-foreground">
               {sorted.length === 0
                 ? `No ${mode === "student" ? "assignments" : "projects"} yet. Create your first task to get started.`
-                : "All clear. Nice work 🙌"}
+                : "All clear. Nice work \ud83d\ude4c"}
             </p>
             {sorted.length === 0 && (
               <TaskDialog
