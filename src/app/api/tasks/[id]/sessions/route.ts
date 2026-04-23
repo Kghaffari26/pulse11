@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireUserId } from "@/server-lib/auth";
 import { queryInternalDatabase } from "@/server-lib/internal-db-query";
 import { generateSessions } from "@/shared/models/pulse";
 
@@ -11,10 +12,13 @@ function uid() {
  *
  * Two modes:
  * 1. Regenerate pending Pomodoro sessions for a task: pass { workBlock?, breakBlock? }.
- * 2. Log an ad-hoc completed session (when no pre-generated session exists):
- *    pass { startedAt, durationMinutes, completed: true }. Adds to task.completed_minutes.
+ * 2. Log an ad-hoc completed session: pass { startedAt, durationMinutes, completed: true }.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const gate = await requireUserId();
+  if (gate instanceof NextResponse) return gate;
+  const userId = gate;
+
   const { id } = await params;
   const body = (await req.json().catch(() => ({}))) as {
     workBlock?: number;
@@ -24,7 +28,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     completed?: boolean;
   };
 
-  const rows = await queryInternalDatabase(`SELECT * FROM pulse_tasks WHERE id = $1`, [id]);
+  const rows = await queryInternalDatabase(
+    `SELECT * FROM pulse_tasks WHERE id = $1 AND user_email = $2`,
+    [id, userId],
+  );
   const task = rows[0];
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
