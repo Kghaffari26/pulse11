@@ -31,6 +31,9 @@ async function hydrateTasks(rows: Record<string, unknown>[]): Promise<Task[]> {
     status: r.status as Task["status"],
     completedMinutes: r.completed_minutes as number,
     notes: (r.notes as string) ?? null,
+    projectId: (r.project_id as string | null) ?? null,
+    description: (r.description as string | null) ?? null,
+    completedAt: r.completed_at ? new Date(r.completed_at as string).toISOString() : null,
     createdAt: new Date(r.created_at as string).toISOString(),
     updatedAt: new Date(r.updated_at as string).toISOString(),
     subtasks: subtasks

@@ -18,22 +18,39 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { mutate } from "swr";
 import {
+  completeTask,
   deleteTask,
   deleteSubtask,
+  undoCompleteTask,
   updateSubtask,
-  updateTask,
   regenerateSessions,
 } from "@/client-lib/api-client";
 import {
   computeUrgency,
   formatDuration,
   formatRemaining,
+  isTaskCompleted,
   urgencyBar,
   urgencyColor,
   type Task,
+  type TaskStatus,
 } from "@/shared/models/pulse";
 import { cn } from "@/shared/utils";
+
+function applyOptimisticStatus(
+  taskId: string,
+  status: TaskStatus,
+  completedAt: string | null,
+) {
+  return mutate(
+    "/tasks",
+    (tasks?: Task[]) =>
+      (tasks ?? []).map((t) => (t.id === taskId ? { ...t, status, completedAt } : t)),
+    { revalidate: false },
+  );
+}
 
 interface Props {
   task: Task;
@@ -45,16 +62,49 @@ export function TaskCard({ task, now }: Props) {
   const urgency = computeUrgency(task, now);
   const progress = task.estimatedMinutes > 0 ? Math.min(100, (task.completedMinutes / task.estimatedMinutes) * 100) : 0;
   const doneSubs = task.subtasks.filter((s) => s.done).length;
-  const isDone = task.status === "done";
+  const isDone = isTaskCompleted(task);
 
   const toggleDone = async () => {
-    const next = isDone ? "pending" : "done";
-    try {
-      await updateTask(task.id, { status: next });
-      toast.success(next === "done" ? "Task completed 🎉" : "Task reopened");
-    } catch {
-      toast.error("Couldn't update task");
+    if (isDone) {
+      // Reopen: no undo ceremony, just flip it back.
+      await applyOptimisticStatus(task.id, "pending", null);
+      try {
+        await undoCompleteTask(task.id);
+        toast.success("Task reopened");
+      } catch {
+        toast.error("Couldn't reopen task");
+        await mutate("/tasks");
+      }
+      return;
     }
+
+    // Complete: optimistic removal from active list + 5s undo toast.
+    const nowIso = new Date().toISOString();
+    await applyOptimisticStatus(task.id, "completed", nowIso);
+    try {
+      await completeTask(task.id);
+    } catch {
+      toast.error("Couldn't complete task");
+      await mutate("/tasks");
+      return;
+    }
+
+    toast.success(`"${task.title}" completed`, {
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          await applyOptimisticStatus(task.id, "pending", null);
+          try {
+            await undoCompleteTask(task.id);
+            toast.success("Task restored");
+          } catch {
+            toast.error("Couldn't undo");
+            await mutate("/tasks");
+          }
+        },
+      },
+    });
   };
 
   const planSessions = async () => {

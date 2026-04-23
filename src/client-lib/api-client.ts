@@ -30,6 +30,23 @@ export async function deleteTask(id: string) {
   await mutate("/tasks");
 }
 
+/**
+ * Mark a task complete via the unified view — the DB trigger sets
+ * status='completed' and completed_at=NOW().
+ */
+export async function completeTask(id: string) {
+  await apiClient.post(`/tasks/${id}/complete`);
+  await mutate("/tasks");
+}
+
+/**
+ * Clear completion (undo). The trigger nulls completed_at.
+ */
+export async function undoCompleteTask(id: string) {
+  await apiClient.delete(`/tasks/${id}/complete`);
+  await mutate("/tasks");
+}
+
 export async function addSubtask(taskId: string, title: string) {
   await apiClient.post(`/tasks/${taskId}/subtasks`, { title });
   await mutate("/tasks");
