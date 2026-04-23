@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { generateText } from "@/client-lib/built-in-integrations/ai";
 import { updateTask } from "@/client-lib/api-client";
 import { formatDuration, type Task } from "@/shared/models/pulse";
 
@@ -74,6 +73,20 @@ const PRESETS: Preset[] = [
   },
 ];
 
+async function callAIAssist(prompt: string): Promise<string> {
+  const res = await fetch("/api/ai-assist", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ prompt }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
+  if (!res.ok) {
+    throw new Error(data.error || `AI assist failed (${res.status})`);
+  }
+  if (!data.text) throw new Error("AI returned an empty response");
+  return data.text;
+}
+
 export function AIAssistDialog({ task, trigger }: Props) {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -87,7 +100,7 @@ export function AIAssistDialog({ task, trigger }: Props) {
     setActivePreset(presetId);
     setResult("");
     try {
-      const text = await generateText(finalPrompt, false, false, "low", "openai");
+      const text = await callAIAssist(finalPrompt);
       setResult(text);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "AI request failed";
