@@ -1,5 +1,6 @@
 import "globals.css";
 
+import { ClerkProvider, SignedIn, UserButton } from "@clerk/nextjs";
 import { type Metadata } from "next";
 import { Inter } from "next/font/google";
 import { lazy } from "react";
@@ -31,23 +32,37 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.className}`}>
-      <body className="min-h-screen" suppressHydrationWarning>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          {NAV_LINKS.length >= 2 ? (
-            <SidebarProvider>
-              <Sidebar />
-              <SidebarInset>
+    <ClerkProvider publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || "pk_test_cGF0aWVudC1oYWdmaXNoLTY1LmNsZXJrLmFjY291bnRzLmRldiQ"}>
+      <html lang="en" suppressHydrationWarning className={`${inter.className}`}>
+        <body className="min-h-screen" suppressHydrationWarning>
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+            {NAV_LINKS.length >= 2 ? (
+              <SidebarProvider>
+                <Sidebar />
+                <SidebarInset>
+                  <div className="flex items-center justify-end gap-2 border-b px-4 py-2">
+                    <SignedIn>
+                      <UserButton afterSignOutUrl="/sign-in" />
+                    </SignedIn>
+                  </div>
+                  <main className="flex-1 p-4">{children}</main>
+                </SidebarInset>
+              </SidebarProvider>
+            ) : (
+              <>
+                <div className="flex items-center justify-end gap-2 border-b px-4 py-2">
+                  <SignedIn>
+                    <UserButton afterSignOutUrl="/sign-in" />
+                  </SignedIn>
+                </div>
                 <main className="flex-1 p-4">{children}</main>
-              </SidebarInset>
-            </SidebarProvider>
-          ) : (
-            <main className="flex-1 p-4">{children}</main>
-          )}
-          <Toaster richColors />
-          <ElementSelector />
-        </ThemeProvider>
-      </body>
-    </html>
+              </>
+            )}
+            <Toaster richColors />
+            <ElementSelector />
+          </ThemeProvider>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

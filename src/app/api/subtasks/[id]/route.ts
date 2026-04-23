@@ -1,9 +1,28 @@
 import { NextResponse } from "next/server";
+import { requireUserId } from "@/server-lib/auth";
 import { queryInternalDatabase } from "@/server-lib/internal-db-query";
 import { validateSubtaskTitle } from "@/shared/models/pulse-validation";
 
+async function assertOwns(subtaskId: string, userId: string): Promise<NextResponse | null> {
+  const rows = await queryInternalDatabase(
+    `SELECT 1 FROM pulse_subtasks s
+       JOIN pulse_tasks t ON t.id = s.task_id
+      WHERE s.id = $1 AND t.user_email = $2`,
+    [subtaskId, userId],
+  );
+  if (rows.length === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return null;
+}
+
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const gate = await requireUserId();
+  if (gate instanceof NextResponse) return gate;
+  const userId = gate;
+
   const { id } = await params;
+  const ownershipCheck = await assertOwns(id, userId);
+  if (ownershipCheck) return ownershipCheck;
+
   const { done, title } = (await req.json()) as { done?: boolean; title?: string };
   if (title !== undefined) {
     const validation = validateSubtaskTitle(title);
@@ -21,7 +40,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const gate = await requireUserId();
+  if (gate instanceof NextResponse) return gate;
+  const userId = gate;
+
   const { id } = await params;
+  const ownershipCheck = await assertOwns(id, userId);
+  if (ownershipCheck) return ownershipCheck;
+
   await queryInternalDatabase(`DELETE FROM pulse_subtasks WHERE id = $1`, [id]);
   return NextResponse.json({ ok: true });
 }

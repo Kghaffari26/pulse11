@@ -1,33 +1,26 @@
-import { internalDbClient } from "./internal-db";
+import { Pool } from "@neondatabase/serverless";
 
 type SqlPrimitive = string | number | boolean | Date | null;
 type SqlParam = SqlPrimitive | SqlPrimitive[] | Record<string, unknown>;
 
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is not set");
+}
+
+// Module-scoped pool so serverless functions reuse the same instance across
+// warm invocations. The Neon serverless Pool speaks the Postgres wire protocol
+// over WebSockets and exposes a standard pg-style `.query(sql, params)` API.
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
 /**
- * Query the app's internal Postgres database via the Vybe API
- * @param sql - The SQL query to execute, using $1, $2, etc. for parameters
- * @param params - The parameters to pass to the query (primitives, arrays for ANY clauses, or objects for JSONB)
- * @returns The result rows from the query
- * @example
- * const result = await queryInternalDatabase(
- *   "SELECT * FROM items WHERE name = $1",
- *   ["example"]
- * );
- * // result = [ { id: "abc123", name: "example", createdAt: "2025-09-04T11:03:20.107Z" }, ... ]
- *
- * // Using arrays for ANY clauses:
- * const users = await queryInternalDatabase(
- *   "SELECT * FROM users WHERE id = ANY($1)",
- *   [[1, 2, 3]]
- * );
- *
- * // Using objects for JSONB columns:
- * await queryInternalDatabase(
- *   "INSERT INTO events (data) VALUES ($1)",
- *   [{ event: "click", page: "/home" }]
- * );
+ * Query the app's internal Postgres database directly via the Neon serverless
+ * Pool. Uses DATABASE_URL env var. Signature preserved for existing callers
+ * (tasks, prefs, sessions, subtasks).
  */
-export async function queryInternalDatabase(sql: string, params: SqlParam[] = []) {
-  const response = await internalDbClient.post<Record<string, unknown>[]>("/query", { sql, params });
-  return response.data;
+export async function queryInternalDatabase(
+  query: string,
+  params: SqlParam[] = [],
+): Promise<Record<string, unknown>[]> {
+  const result = await pool.query(query, params as unknown[]);
+  return result.rows as Record<string, unknown>[];
 }

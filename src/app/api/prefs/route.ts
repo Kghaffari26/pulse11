@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
+import { requireUserId } from "@/server-lib/auth";
 import { queryInternalDatabase } from "@/server-lib/internal-db-query";
 import type { UserPrefs } from "@/shared/models/pulse";
 
-async function getUserEmail() {
-  return "dev@pulse.local";
-}
-
 export async function GET() {
-  const email = await getUserEmail();
-  const rows = await queryInternalDatabase(`SELECT * FROM pulse_user_prefs WHERE user_email = $1`, [email]);
+  const gate = await requireUserId();
+  if (gate instanceof NextResponse) return gate;
+  const userId = gate;
+
+  const rows = await queryInternalDatabase(`SELECT * FROM pulse_user_prefs WHERE user_email = $1`, [userId]);
   const row = rows[0];
   if (!row) {
     const defaults: UserPrefs = {
-      userEmail: email,
+      userEmail: userId,
       mode: "student",
       aggressiveAlerts: false,
       notificationsEnabled: true,
@@ -28,7 +28,10 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  const email = await getUserEmail();
+  const gate = await requireUserId();
+  if (gate instanceof NextResponse) return gate;
+  const userId = gate;
+
   const body = (await req.json()) as Partial<Pick<UserPrefs, "mode" | "aggressiveAlerts" | "notificationsEnabled">>;
   await queryInternalDatabase(
     `INSERT INTO pulse_user_prefs (user_email, mode, aggressive_alerts, notifications_enabled)
@@ -38,7 +41,7 @@ export async function PATCH(req: Request) {
        aggressive_alerts = COALESCE($3, pulse_user_prefs.aggressive_alerts),
        notifications_enabled = COALESCE($4, pulse_user_prefs.notifications_enabled),
        updated_at = NOW()`,
-    [email, body.mode ?? null, body.aggressiveAlerts ?? null, body.notificationsEnabled ?? null],
+    [userId, body.mode ?? null, body.aggressiveAlerts ?? null, body.notificationsEnabled ?? null],
   );
   return NextResponse.json({ ok: true });
 }

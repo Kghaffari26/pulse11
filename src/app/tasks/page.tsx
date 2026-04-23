@@ -11,7 +11,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { computeUrgency, type TaskCategory } from "@/shared/models/pulse";
-import { GEMINI_ACCOUNT_ID, OPENAI_ACCOUNT_ID } from "@/config/ai-accounts";
 
 const CATEGORIES: (TaskCategory | "all")[] = ["all", "School", "Work", "Certification", "Personal"];
 const SORT_OPTIONS = ["urgency", "deadline", "created"] as const;
@@ -110,7 +109,7 @@ export default function TasksPage() {
         </div>
         <div className="flex items-center gap-2">
           <ModeSwitch />
-          <SmartImportDialog mode={mode} geminiAccountId={GEMINI_ACCOUNT_ID} openaiAccountId={OPENAI_ACCOUNT_ID} />
+          <SmartImportDialog mode={mode} />
           <TaskDialog mode={mode} />
         </div>
       </header>

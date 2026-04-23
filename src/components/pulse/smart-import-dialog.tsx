@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { runIntegrationAction } from "@/client-lib/integrations-client";
 import { createTask } from "@/client-lib/api-client";
 import type { JSONSchema7 } from "json-schema";
 import type { AppMode, TaskCategory, TaskPriority } from "@/shared/models/pulse";
@@ -19,8 +18,6 @@ import type { AppMode, TaskCategory, TaskPriority } from "@/shared/models/pulse"
 interface Props {
   mode: AppMode;
   trigger?: React.ReactNode;
-  geminiAccountId?: string;
-  openaiAccountId?: string;
 }
 
 const CATEGORIES: TaskCategory[] = ["School", "Work", "Certification", "Personal"];
@@ -94,29 +91,9 @@ ${content}
 """`;
 }
 
-interface GeminiPart { text?: string }
-interface GeminiCandidate { content?: { parts?: GeminiPart[] } }
-interface OpenAIMessage { content?: string }
-interface OpenAIChoice { message?: OpenAIMessage; text?: string }
-interface AIResponse {
-  candidates?: GeminiCandidate[];
-  choices?: OpenAIChoice[];
-  text?: string;
-  response?: string;
-  content?: string;
-  message?: { content?: string };
-}
-
-function extractJson(raw: AIResponse | string): ExtractedTask {
-  const textOut = typeof raw === "string"
-    ? raw
-    : raw.candidates?.[0]?.content?.parts?.[0]?.text
-      ?? raw.choices?.[0]?.message?.content
-      ?? raw.choices?.[0]?.text
-      ?? raw.message?.content
-      ?? raw.text ?? raw.response ?? raw.content ?? "";
-  if (!textOut) throw new Error("Empty response from AI");
-  const cleaned = textOut.replace(/^```(?:json)?/i, "").replace(/```\s*$/i, "").trim();
+function extractJson(raw: string): ExtractedTask {
+  if (!raw) throw new Error("Empty response from AI");
+  const cleaned = raw.replace(/^```(?:json)?/i, "").replace(/```\s*$/i, "").trim();
   const jsonStart = cleaned.indexOf("{");
   const jsonEnd = cleaned.lastIndexOf("}");
   if (jsonStart < 0 || jsonEnd < 0) throw new Error("Could not find JSON in AI response");
@@ -185,7 +162,25 @@ async function downscaleDataUrl(dataUrl: string, maxDim = 1600, quality = 0.85):
   });
 }
 
-export function SmartImportDialog({ mode, trigger, geminiAccountId, openaiAccountId }: Props) {
+async function callSmartImport(body: {
+  mode: "text" | "image";
+  prompt: string;
+  imageBase64?: string;
+}): Promise<string> {
+  const res = await fetch("/api/smart-import", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
+  if (!res.ok) {
+    throw new Error(data.error || `Smart import failed (${res.status})`);
+  }
+  if (!data.text) throw new Error("Empty response from AI");
+  return data.text;
+}
+
+export function SmartImportDialog({ mode, trigger }: Props) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"text" | "image">("text");
   const [text, setText] = useState("");
@@ -252,57 +247,28 @@ export function SmartImportDialog({ mode, trigger, geminiAccountId, openaiAccoun
           setAnalyzing(false);
           return;
         }
-        if (!geminiAccountId && !openaiAccountId) {
-          throw new Error("No AI account configured");
-        }
-        if (geminiAccountId) {
-          const raw = await runIntegrationAction<AIResponse | string>({
-            accountId: geminiAccountId,
-            actionId: "google_gemini-generate-content-from-text",
-            input: {
-              model: "gemini-2.5-flash",
-              text: buildPrompt(text, mode) + schemaInstruction,
-            },
-          });
-          setExtracted(extractJson(raw));
-        } else if (openaiAccountId) {
-          const raw = await runIntegrationAction<AIResponse | string>({
-            accountId: openaiAccountId,
-            actionId: "~/openai-chat",
-            input: {
-              modelId: "gpt-4o-mini",
-              userMessage: buildPrompt(text, mode) + schemaInstruction,
-              responseFormat: "json_object",
-            },
-          });
-          setExtracted(extractJson(raw));
-        }
+        const raw = await callSmartImport({
+          mode: "text",
+          prompt: buildPrompt(text, mode) + schemaInstruction,
+        });
+        setExtracted(extractJson(raw));
       } else {
         if (!imageDataUrl) {
           toast.error("Paste or upload a screenshot first");
           setAnalyzing(false);
           return;
         }
-        if (!openaiAccountId) {
-          throw new Error("OpenAI account is required for screenshot analysis. Please connect ChatGPT.");
-        }
         // Downscale to keep payload small and server-friendly
         const shrunk = await downscaleDataUrl(imageDataUrl);
-        // OpenAI expects raw base64 (no data:... prefix)
         const base64 = shrunk.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
-        const raw = await runIntegrationAction<AIResponse | string>({
-          accountId: openaiAccountId,
-          actionId: "~/openai-chat",
-          input: {
-            modelId: "gpt-4o-mini",
-            systemInstructions: "You extract structured task data from screenshots of learning management systems like Canvas. Always respond with valid JSON matching the requested schema.",
-            userMessage: buildPrompt(
-              "(See the attached screenshot of a Canvas assignment. Read every visible word carefully — title, due date/time, points, instructions, rubric.)",
+        const raw = await callSmartImport({
+          mode: "image",
+          prompt:
+            buildPrompt(
+              "(See the attached screenshot of a Canvas assignment. Read every visible word carefully \u2014 title, due date/time, points, instructions, rubric.)",
               mode,
             ) + schemaInstruction,
-            images: [base64],
-            responseFormat: "json_object",
-          },
+          imageBase64: base64,
         });
         setExtracted(extractJson(raw));
       }
@@ -385,7 +351,7 @@ export function SmartImportDialog({ mode, trigger, geminiAccountId, openaiAccoun
                 <Textarea
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder="Paste the assignment description, due date, rubric, and any instructions from Canvas…"
+                  placeholder="Paste the assignment description, due date, rubric, and any instructions from Canvas\u2026"
                   rows={10}
                   className="resize-none"
                 />
@@ -414,7 +380,7 @@ export function SmartImportDialog({ mode, trigger, geminiAccountId, openaiAccoun
                   >
                     <ImageIcon className="h-7 w-7 opacity-60" />
                     <span className="font-medium text-foreground">Paste a screenshot</span>
-                    <span className="text-xs">Press <kbd className="rounded bg-background px-1.5 py-0.5 font-mono">⌘/Ctrl + V</kbd> anywhere in this dialog, or click to upload</span>
+                    <span className="text-xs">Press <kbd className="rounded bg-background px-1.5 py-0.5 font-mono">\u2318/Ctrl + V</kbd> anywhere in this dialog, or click to upload</span>
                     <span className="mt-2 inline-flex items-center gap-1 text-xs text-primary"><Upload className="h-3 w-3" /> Choose file</span>
                   </button>
                 )}
@@ -436,7 +402,7 @@ export function SmartImportDialog({ mode, trigger, geminiAccountId, openaiAccoun
               <Button variant="ghost" onClick={() => handleClose(false)}>Cancel</Button>
               <Button onClick={analyze} disabled={analyzing}>
                 {analyzing ? (
-                  <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Analyzing…</>
+                  <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Analyzing\u2026</>
                 ) : (
                   <><Sparkles className="mr-1.5 h-4 w-4" /> Analyze</>
                 )}
@@ -553,9 +519,9 @@ export function SmartImportDialog({ mode, trigger, geminiAccountId, openaiAccoun
             </div>
 
             <DialogFooter>
-              <Button variant="ghost" onClick={() => setExtracted(null)}>← Back</Button>
+              <Button variant="ghost" onClick={() => setExtracted(null)}>\u2190 Back</Button>
               <Button onClick={confirm} disabled={submitting}>
-                {submitting ? "Creating…" : "Create Task"}
+                {submitting ? "Creating\u2026" : "Create Task"}
               </Button>
             </DialogFooter>
           </div>
