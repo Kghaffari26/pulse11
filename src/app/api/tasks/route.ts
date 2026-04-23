@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
+import { requireUserId } from "@/server-lib/auth";
 import { queryInternalDatabase } from "@/server-lib/internal-db-query";
 import type { Task, TaskInput } from "@/shared/models/pulse";
 import { validateTaskInput } from "@/shared/models/pulse-validation";
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-}
-
-async function getUserEmail(): Promise<string> {
-  // In dev there is no session; tie everything to a dev user
-  return "dev@pulse.local";
 }
 
 async function hydrateTasks(rows: Record<string, unknown>[]): Promise<Task[]> {
@@ -60,17 +56,23 @@ async function hydrateTasks(rows: Record<string, unknown>[]): Promise<Task[]> {
 }
 
 export async function GET() {
-  const email = await getUserEmail();
+  const gate = await requireUserId();
+  if (gate instanceof NextResponse) return gate;
+  const userId = gate;
+
   const rows = await queryInternalDatabase(
     `SELECT * FROM pulse_tasks WHERE user_email = $1 ORDER BY deadline ASC`,
-    [email],
+    [userId],
   );
   const tasks = await hydrateTasks(rows);
   return NextResponse.json(tasks);
 }
 
 export async function POST(req: Request) {
-  const email = await getUserEmail();
+  const gate = await requireUserId();
+  if (gate instanceof NextResponse) return gate;
+  const userId = gate;
+
   const body = (await req.json()) as TaskInput;
 
   const validation = validateTaskInput(body);
@@ -84,7 +86,7 @@ export async function POST(req: Request) {
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
     [
       id,
-      email,
+      userId,
       body.title.trim(),
       body.category,
       body.deadline,
