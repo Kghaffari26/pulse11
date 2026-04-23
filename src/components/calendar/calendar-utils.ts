@@ -7,6 +7,17 @@ export function isCalendarView(v: string | null): v is CalendarView {
 /** Parse a YYYY-MM-DD-ish ISO into a local-timezone Date, or today on failure. */
 export function parseDateParam(raw: string | null | undefined): Date {
   if (!raw) return startOfDay(new Date());
+  // `new Date("2026-04-23")` is parsed as UTC midnight per the ECMAScript
+  // spec, which in any western timezone rolls back to the previous local
+  // day. Handle the YYYY-MM-DD form explicitly as local-tz midnight so the
+  // round-trip through toDateParam/parseDateParam is stable.
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (match) {
+    const year = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1;
+    const day = parseInt(match[3], 10);
+    return new Date(year, month, day);
+  }
   const d = new Date(raw);
   if (isNaN(d.getTime())) return startOfDay(new Date());
   return d;
