@@ -79,12 +79,20 @@ async function callAIAssist(prompt: string): Promise<string> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ prompt }),
   });
-  const data = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
+  const data: unknown = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || `AI assist failed (${res.status})`);
+    const msg =
+      data && typeof data === "object" && "error" in data && typeof (data as { error?: unknown }).error === "string"
+        ? (data as { error: string }).error
+        : `AI request failed (${res.status})`;
+    throw new Error(msg);
   }
-  if (!data.text) throw new Error("AI returned an empty response");
-  return data.text;
+  const text =
+    data && typeof data === "object" && "text" in data && typeof (data as { text?: unknown }).text === "string"
+      ? (data as { text: string }).text
+      : "";
+  if (!text) throw new Error("AI returned an empty response");
+  return text;
 }
 
 export function AIAssistDialog({ task, trigger }: Props) {
