@@ -27,7 +27,11 @@ export const PROJECT_DESCRIPTION_MAX = 500;
 export const PROJECT_COLOR_MAX = 32;
 export const PROJECT_ACTIVE_LIMIT = 20;
 
-export type Validation<T> = { ok: true; value: T } | { ok: false; error: string };
+// Narrow-friendly discriminated union (the extra optional field on each
+// branch keeps narrowing reliable when strictNullChecks is disabled).
+export type Validation<T> =
+  | { ok: true; value: T; error?: undefined }
+  | { ok: false; error: string; value?: undefined };
 
 export function validateProjectInput(input: unknown): Validation<ProjectInput> {
   if (!input || typeof input !== "object") return { ok: false, error: "Invalid project input" };

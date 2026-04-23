@@ -10,8 +10,8 @@
 // fallback paths without real HTTP.
 
 export type AiAssistResult =
-  | { ok: true; text: string; provider: "gemini" | "openai" }
-  | { ok: false; status: number; error: string };
+  | { ok: true; text: string; provider: "gemini" | "openai"; error?: undefined; status?: undefined }
+  | { ok: false; status: number; error: string; text?: undefined; provider?: undefined };
 
 export interface AiAssistConfig {
   geminiKey?: string;
@@ -24,11 +24,14 @@ export interface AiAssistConfig {
 interface ProviderAttempt {
   ok: true;
   text: string;
+  retryable?: undefined;
+  error?: undefined;
 }
 interface ProviderFail {
   ok: false;
   retryable: boolean;
   error: string;
+  text?: undefined;
 }
 type ProviderOutcome = ProviderAttempt | ProviderFail;
 

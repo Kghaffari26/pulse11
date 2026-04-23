@@ -25,7 +25,11 @@ export const NOTE_TITLE_MAX = 200;
 // Rough cap; Tiptap JSON + markdown for novel-length notes still fits.
 export const NOTE_MARKDOWN_MAX = 200_000;
 
-export type Validation<T> = { ok: true; value: T } | { ok: false; error: string };
+// Including the opposite field as `undefined` on each branch lets TypeScript
+// narrow correctly even with strictNullChecks off in this project's tsconfig.
+export type Validation<T> =
+  | { ok: true; value: T; error?: undefined }
+  | { ok: false; error: string; value?: undefined };
 
 function isPlainObject(x: unknown): x is Record<string, unknown> {
   return !!x && typeof x === "object" && !Array.isArray(x);
@@ -76,7 +80,7 @@ export function validateNoteCreate(input: unknown): Validation<NoteCreateInput> 
   if (!isPlainObject(input)) return { ok: false, error: "Invalid note input" };
   const out: NoteCreateInput = {};
   const shared = validateShared(input, out);
-  if (!shared.ok) return shared;
+  if (!shared.ok) return { ok: false, error: shared.error };
   return { ok: true, value: out };
 }
 
@@ -84,6 +88,6 @@ export function validateNotePatch(input: unknown): Validation<NotePatch> {
   if (!isPlainObject(input)) return { ok: false, error: "Invalid note patch" };
   const out: NotePatch = {};
   const shared = validateShared(input, out);
-  if (!shared.ok) return shared;
+  if (!shared.ok) return { ok: false, error: shared.error };
   return { ok: true, value: out };
 }

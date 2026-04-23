@@ -38,10 +38,9 @@ export async function POST(req: Request) {
     prompt,
   });
 
-  if (result.ok) {
-    return NextResponse.json({ text: result.text, provider: result.provider });
+  if ("error" in result) {
+    console.error("[ai-assist] double-fail:", result.error);
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
-
-  console.error("[ai-assist] double-fail:", result.error);
-  return NextResponse.json({ error: result.error }, { status: result.status });
+  return NextResponse.json({ text: result.text, provider: result.provider });
 }

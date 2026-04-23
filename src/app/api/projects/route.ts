@@ -9,7 +9,7 @@ import {
 
 export const runtime = "nodejs";
 
-export function rowToProject(row: Record<string, unknown>): Project {
+function rowToProject(row: Record<string, unknown>): Project {
   return {
     id: row.id as string,
     userEmail: row.user_email as string,
