@@ -2,7 +2,13 @@ import type { TaskCategory, TaskPriority, TaskStatus } from "./pulse";
 
 export const TASK_CATEGORIES: readonly TaskCategory[] = ["School", "Work", "Certification", "Personal"];
 export const TASK_PRIORITIES: readonly TaskPriority[] = ["Low", "Medium", "High", "Critical"];
-export const TASK_STATUSES: readonly TaskStatus[] = ["pending", "in_progress", "done"];
+export const TASK_STATUSES: readonly TaskStatus[] = ["pending", "in_progress", "done", "completed"];
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isValidUuid(v: unknown): v is string {
+  return typeof v === "string" && UUID_RE.test(v);
+}
 
 export interface ValidationResult {
   ok: boolean;
@@ -84,6 +90,16 @@ export function validateTaskPatch(input: unknown): ValidationResult {
   }
   if ("mode" in body && body.mode !== "student" && body.mode !== "work") {
     return { ok: false, error: "mode must be 'student' or 'work'" };
+  }
+  if ("projectId" in body) {
+    if (body.projectId !== null && !isValidUuid(body.projectId)) {
+      return { ok: false, error: "projectId must be a UUID or null" };
+    }
+  }
+  if ("description" in body) {
+    if (body.description !== null && typeof body.description !== "string") {
+      return { ok: false, error: "description must be a string or null" };
+    }
   }
   return { ok: true };
 }

@@ -42,6 +42,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     status: "status",
     completedMinutes: "completed_minutes",
     notes: "notes",
+    projectId: "project_id",
+    description: "description",
   };
   for (const [k, v] of Object.entries(body)) {
     const col = map[k];

@@ -31,6 +31,9 @@ async function hydrateTasks(rows: Record<string, unknown>[]): Promise<Task[]> {
     status: r.status as Task["status"],
     completedMinutes: r.completed_minutes as number,
     notes: (r.notes as string) ?? null,
+    projectId: (r.project_id as string | null) ?? null,
+    description: (r.description as string | null) ?? null,
+    completedAt: r.completed_at ? new Date(r.completed_at as string).toISOString() : null,
     createdAt: new Date(r.created_at as string).toISOString(),
     updatedAt: new Date(r.updated_at as string).toISOString(),
     subtasks: subtasks
@@ -55,15 +58,32 @@ async function hydrateTasks(rows: Record<string, unknown>[]): Promise<Task[]> {
   }));
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const gate = await requireUserId();
   if (gate instanceof NextResponse) return gate;
   const userId = gate;
 
-  const rows = await queryInternalDatabase(
-    `SELECT * FROM pulse_tasks WHERE user_email = $1 ORDER BY deadline ASC`,
-    [userId],
-  );
+  const url = new URL(req.url);
+  const statusFilter = url.searchParams.get("status");
+
+  let query: string;
+  if (statusFilter === "archived") {
+    // Archived list: only completed, reverse-chrono by completed_at.
+    // NULLS LAST guards against any legacy 'done' rows without a completed_at.
+    query = `SELECT * FROM pulse_tasks
+             WHERE user_email = $1
+               AND (status = 'completed' OR status = 'done')
+             ORDER BY completed_at DESC NULLS LAST, updated_at DESC`;
+  } else if (statusFilter === "active") {
+    query = `SELECT * FROM pulse_tasks
+             WHERE user_email = $1
+               AND status <> 'completed' AND status <> 'done'
+             ORDER BY deadline ASC`;
+  } else {
+    query = `SELECT * FROM pulse_tasks WHERE user_email = $1 ORDER BY deadline ASC`;
+  }
+
+  const rows = await queryInternalDatabase(query, [userId]);
   const tasks = await hydrateTasks(rows);
   return NextResponse.json(tasks);
 }

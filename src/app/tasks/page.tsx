@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTasks, usePrefs } from "@/client-lib/api-client";
 import { TaskCard } from "@/components/pulse/task-card";
+import { TaskDetailPanel } from "@/components/pulse/task-detail-panel";
 import { TaskDialog } from "@/components/pulse/task-dialog";
 import { SmartImportDialog } from "@/components/pulse/smart-import-dialog";
 import { ModeSwitch } from "@/components/pulse/mode-switch";
@@ -10,7 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { computeUrgency, type TaskCategory } from "@/shared/models/pulse";
+import { computeUrgency, isTaskCompleted, type TaskCategory } from "@/shared/models/pulse";
 
 const CATEGORIES: (TaskCategory | "all")[] = ["all", "School", "Work", "Certification", "Personal"];
 const SORT_OPTIONS = ["urgency", "deadline", "created"] as const;
@@ -52,6 +53,7 @@ export default function TasksPage() {
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [sort, setSort] = useState<SortOption>("urgency");
   const [hydrated, setHydrated] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     const iv = setInterval(() => setNow(new Date()), 30000);
@@ -97,8 +99,13 @@ export default function TasksPage() {
     return sorted;
   }, [tasks, mode, category, query, sort, now]);
 
-  const active = filtered.filter((t) => t.status !== "done");
-  const done = filtered.filter((t) => t.status === "done");
+  const active = filtered.filter((t) => !isTaskCompleted(t));
+  const done = filtered.filter((t) => isTaskCompleted(t));
+
+  const selectedTask = useMemo(
+    () => (tasks ?? []).find((t) => t.id === selectedTaskId) ?? null,
+    [tasks, selectedTaskId],
+  );
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 pb-20">
@@ -139,13 +146,19 @@ export default function TasksPage() {
         </TabsList>
         <TabsContent value="active" className="mt-4 space-y-3">
           {active.length === 0 && <Card className="p-8 text-center text-sm text-muted-foreground">No tasks match your filters.</Card>}
-          {active.map((t) => <TaskCard key={t.id} task={t} now={now} />)}
+          {active.map((t) => <TaskCard key={t.id} task={t} now={now} onOpenDetail={setSelectedTaskId} />)}
         </TabsContent>
         <TabsContent value="done" className="mt-4 space-y-3">
           {done.length === 0 && <Card className="p-8 text-center text-sm text-muted-foreground">No completed tasks yet.</Card>}
-          {done.map((t) => <TaskCard key={t.id} task={t} now={now} />)}
+          {done.map((t) => <TaskCard key={t.id} task={t} now={now} onOpenDetail={setSelectedTaskId} />)}
         </TabsContent>
       </Tabs>
+
+      <TaskDetailPanel
+        task={selectedTask}
+        open={selectedTaskId != null}
+        onClose={() => setSelectedTaskId(null)}
+      />
     </div>
   );
 }
