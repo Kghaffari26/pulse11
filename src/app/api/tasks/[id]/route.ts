@@ -1,9 +1,28 @@
 import { NextResponse } from "next/server";
+import { requireUserId } from "@/server-lib/auth";
 import { queryInternalDatabase } from "@/server-lib/internal-db-query";
 import { validateTaskPatch } from "@/shared/models/pulse-validation";
 
+async function assertOwns(taskId: string, userId: string): Promise<NextResponse | null> {
+  const rows = await queryInternalDatabase(
+    `SELECT 1 FROM pulse_tasks WHERE id = $1 AND user_email = $2`,
+    [taskId, userId],
+  );
+  if (rows.length === 0) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  return null;
+}
+
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const gate = await requireUserId();
+  if (gate instanceof NextResponse) return gate;
+  const userId = gate;
+
   const { id } = await params;
+  const ownershipCheck = await assertOwns(id, userId);
+  if (ownershipCheck) return ownershipCheck;
+
   const body = (await req.json()) as Record<string, unknown>;
 
   const validation = validateTaskPatch(body);
@@ -33,15 +52,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
   if (fields.length === 0) return NextResponse.json({ ok: true });
   values.push(id);
+  values.push(userId);
   await queryInternalDatabase(
-    `UPDATE pulse_tasks SET ${fields.join(", ")}, updated_at = NOW() WHERE id = $${values.length}`,
+    `UPDATE pulse_tasks SET ${fields.join(", ")}, updated_at = NOW() WHERE id = $${values.length - 1} AND user_email = $${values.length}`,
     values,
   );
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const gate = await requireUserId();
+  if (gate instanceof NextResponse) return gate;
+  const userId = gate;
+
   const { id } = await params;
-  await queryInternalDatabase(`DELETE FROM pulse_tasks WHERE id = $1`, [id]);
+  await queryInternalDatabase(`DELETE FROM pulse_tasks WHERE id = $1 AND user_email = $2`, [id, userId]);
   return NextResponse.json({ ok: true });
 }
