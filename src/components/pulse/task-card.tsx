@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { mutate } from "swr";
 import {
   completeTask,
@@ -146,9 +147,20 @@ export function TaskCard({ task, now, onOpenDetail }: Props) {
       <div className={cn("h-1 w-full", urgencyBar(urgency.level))} />
       <div className="p-4">
         <div className="flex items-start gap-3">
-          <button onClick={toggleDone} className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground">
-            {isDone ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5" />}
-          </button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={toggleDone}
+                  aria-label={isDone ? "Reopen task" : "Mark complete"}
+                  className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
+                >
+                  {isDone ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{isDone ? "Reopen task" : "Mark complete"}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
