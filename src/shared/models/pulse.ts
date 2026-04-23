@@ -1,6 +1,9 @@
 export type TaskCategory = "School" | "Work" | "Certification" | "Personal";
 export type TaskPriority = "Low" | "Medium" | "High" | "Critical";
-export type TaskStatus = "pending" | "in_progress" | "done";
+// `completed` is the canonical VYBE completion flag (mapped by the
+// vybe_project_tasks view); `done` is retained for backwards compat
+// with any pre-Wave-2 data that used it.
+export type TaskStatus = "pending" | "in_progress" | "done" | "completed";
 export type AppMode = "student" | "work";
 
 export interface Subtask {
@@ -32,10 +35,17 @@ export interface Task {
   status: TaskStatus;
   completedMinutes: number;
   notes?: string | null;
+  projectId?: string | null;
+  description?: string | null;
+  completedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   subtasks: Subtask[];
   sessions: FocusSession[];
+}
+
+export function isTaskCompleted(t: Pick<Task, "status">): boolean {
+  return t.status === "completed" || t.status === "done";
 }
 
 export interface UserPrefs {
@@ -54,6 +64,7 @@ export interface TaskInput {
   mode: AppMode;
   notes?: string;
   subtasks?: string[];
+  projectId?: string | null;
 }
 
 export const PRIORITY_WEIGHT: Record<TaskPriority, number> = {

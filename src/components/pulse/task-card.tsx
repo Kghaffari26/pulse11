@@ -18,43 +18,95 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { mutate } from "swr";
 import {
+  completeTask,
   deleteTask,
   deleteSubtask,
+  undoCompleteTask,
   updateSubtask,
-  updateTask,
   regenerateSessions,
 } from "@/client-lib/api-client";
 import {
   computeUrgency,
   formatDuration,
   formatRemaining,
+  isTaskCompleted,
   urgencyBar,
   urgencyColor,
   type Task,
+  type TaskStatus,
 } from "@/shared/models/pulse";
 import { cn } from "@/shared/utils";
+
+function applyOptimisticStatus(
+  taskId: string,
+  status: TaskStatus,
+  completedAt: string | null,
+) {
+  return mutate(
+    "/tasks",
+    (tasks?: Task[]) =>
+      (tasks ?? []).map((t) => (t.id === taskId ? { ...t, status, completedAt } : t)),
+    { revalidate: false },
+  );
+}
 
 interface Props {
   task: Task;
   now: Date;
+  onOpenDetail?: (taskId: string) => void;
 }
 
-export function TaskCard({ task, now }: Props) {
+export function TaskCard({ task, now, onOpenDetail }: Props) {
   const [expanded, setExpanded] = useState(false);
   const urgency = computeUrgency(task, now);
   const progress = task.estimatedMinutes > 0 ? Math.min(100, (task.completedMinutes / task.estimatedMinutes) * 100) : 0;
   const doneSubs = task.subtasks.filter((s) => s.done).length;
-  const isDone = task.status === "done";
+  const isDone = isTaskCompleted(task);
 
   const toggleDone = async () => {
-    const next = isDone ? "pending" : "done";
-    try {
-      await updateTask(task.id, { status: next });
-      toast.success(next === "done" ? "Task completed 🎉" : "Task reopened");
-    } catch {
-      toast.error("Couldn't update task");
+    if (isDone) {
+      // Reopen: no undo ceremony, just flip it back.
+      await applyOptimisticStatus(task.id, "pending", null);
+      try {
+        await undoCompleteTask(task.id);
+        toast.success("Task reopened");
+      } catch {
+        toast.error("Couldn't reopen task");
+        await mutate("/tasks");
+      }
+      return;
     }
+
+    // Complete: optimistic removal from active list + 5s undo toast.
+    const nowIso = new Date().toISOString();
+    await applyOptimisticStatus(task.id, "completed", nowIso);
+    try {
+      await completeTask(task.id);
+    } catch {
+      toast.error("Couldn't complete task");
+      await mutate("/tasks");
+      return;
+    }
+
+    toast.success(`"${task.title}" completed`, {
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: async () => {
+          await applyOptimisticStatus(task.id, "pending", null);
+          try {
+            await undoCompleteTask(task.id);
+            toast.success("Task restored");
+          } catch {
+            toast.error("Couldn't undo");
+            await mutate("/tasks");
+          }
+        },
+      },
+    });
   };
 
   const planSessions = async () => {
@@ -95,14 +147,38 @@ export function TaskCard({ task, now }: Props) {
       <div className={cn("h-1 w-full", urgencyBar(urgency.level))} />
       <div className="p-4">
         <div className="flex items-start gap-3">
-          <button onClick={toggleDone} className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground">
-            {isDone ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5" />}
-          </button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={toggleDone}
+                  aria-label={isDone ? "Reopen task" : "Mark complete"}
+                  className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
+                >
+                  {isDone ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{isDone ? "Reopen task" : "Mark complete"}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <h3 className={cn("font-semibold leading-tight", isDone && "line-through")}>{task.title}</h3>
+                {onOpenDetail ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenDetail(task.id)}
+                    className={cn(
+                      "block w-full truncate text-left font-semibold leading-tight hover:underline",
+                      isDone && "line-through",
+                    )}
+                  >
+                    {task.title}
+                  </button>
+                ) : (
+                  <h3 className={cn("font-semibold leading-tight", isDone && "line-through")}>{task.title}</h3>
+                )}
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   <Badge variant="outline" className="text-[10px]">{task.category}</Badge>
                   <Badge variant="outline" className="text-[10px]">{task.priority}</Badge>

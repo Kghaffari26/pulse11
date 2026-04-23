@@ -10,12 +10,20 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createTask } from "@/client-lib/api-client";
+import { useProjects } from "@/client-lib/projects-client";
 import type { AppMode, TaskCategory, TaskPriority } from "@/shared/models/pulse";
 
 interface Props {
   mode: AppMode;
   trigger?: React.ReactNode;
+  /**
+   * When set, the Project dropdown is pre-selected to this project id
+   * (the user can still change it to another project or "No project").
+   */
+  defaultProjectId?: string | null;
 }
+
+const NO_PROJECT_VALUE = "__none__";
 
 const CATEGORIES: TaskCategory[] = ["School", "Work", "Certification", "Personal"];
 const PRIORITIES: TaskPriority[] = ["Low", "Medium", "High", "Critical"];
@@ -29,7 +37,7 @@ function defaultDeadline() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function TaskDialog({ mode, trigger }: Props) {
+export function TaskDialog({ mode, trigger, defaultProjectId }: Props) {
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [title, setTitle] = useState("");
@@ -41,6 +49,9 @@ export function TaskDialog({ mode, trigger }: Props) {
   const [notes, setNotes] = useState("");
   const [subs, setSubs] = useState<string[]>([]);
   const [subDraft, setSubDraft] = useState("");
+  const [projectId, setProjectId] = useState<string | null>(defaultProjectId ?? null);
+
+  const { data: projects } = useProjects();
 
   const reset = () => {
     setTitle("");
@@ -51,6 +62,7 @@ export function TaskDialog({ mode, trigger }: Props) {
     setNotes("");
     setSubs([]);
     setSubDraft("");
+    setProjectId(defaultProjectId ?? null);
   };
 
   const submit = async () => {
@@ -74,6 +86,7 @@ export function TaskDialog({ mode, trigger }: Props) {
         mode,
         notes: notes.trim() || undefined,
         subtasks: subs,
+        projectId,
       });
       toast.success("Task created");
       reset();
@@ -124,6 +137,26 @@ export function TaskDialog({ mode, trigger }: Props) {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Project</Label>
+            <Select
+              value={projectId ?? NO_PROJECT_VALUE}
+              onValueChange={(v) => setProjectId(v === NO_PROJECT_VALUE ? null : v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_PROJECT_VALUE}>No project</SelectItem>
+                {(projects ?? []).map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1.5">
