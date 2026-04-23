@@ -102,8 +102,8 @@ export async function POST(req: Request) {
 
   const id = uid("task");
   await queryInternalDatabase(
-    `INSERT INTO pulse_tasks (id, user_email, title, category, deadline, estimated_minutes, priority, mode, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    `INSERT INTO pulse_tasks (id, user_email, title, category, deadline, estimated_minutes, priority, mode, notes, project_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
     [
       id,
       userId,
@@ -114,6 +114,7 @@ export async function POST(req: Request) {
       body.priority,
       body.mode,
       body.notes ?? null,
+      body.projectId ?? null,
     ],
   );
 

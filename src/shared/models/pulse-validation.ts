@@ -50,6 +50,9 @@ export function validateTaskInput(input: unknown): ValidationResult {
   if (body.mode !== "student" && body.mode !== "work") {
     return { ok: false, error: "mode must be 'student' or 'work'" };
   }
+  if ("projectId" in body && body.projectId != null && !isValidUuid(body.projectId)) {
+    return { ok: false, error: "projectId must be a UUID or null" };
+  }
   return { ok: true };
 }
 

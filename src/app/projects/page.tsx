@@ -106,8 +106,16 @@ function ProjectRow({ project }: { project: Project }) {
     }
   }
 
+  const hasColor = Boolean(project.color);
   return (
-    <Card className="flex items-center justify-between gap-4 p-4">
+    <Card
+      className={
+        hasColor
+          ? "flex items-center justify-between gap-4 rounded-l-none border-l-4 p-4"
+          : "flex items-center justify-between gap-4 p-4"
+      }
+      style={hasColor ? { borderLeftColor: project.color ?? undefined } : undefined}
+    >
       <Link
         href={`/projects/${project.id}`}
         className="flex min-w-0 flex-1 items-center gap-3 hover:opacity-80"

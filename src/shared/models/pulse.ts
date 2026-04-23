@@ -64,6 +64,7 @@ export interface TaskInput {
   mode: AppMode;
   notes?: string;
   subtasks?: string[];
+  projectId?: string | null;
 }
 
 export const PRIORITY_WEIGHT: Record<TaskPriority, number> = {
