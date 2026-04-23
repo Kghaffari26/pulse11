@@ -10,6 +10,18 @@ export function useTasks() {
   return useSWR<Task[], Error>("/tasks", fetcher, { refreshInterval: 30000 });
 }
 
+export function useArchivedTasks() {
+  return useSWR<Task[], Error>("/tasks?status=archived", fetcher, { refreshInterval: 60000 });
+}
+
+async function invalidateTaskLists() {
+  await Promise.all([
+    mutate("/tasks"),
+    mutate("/tasks?status=active"),
+    mutate("/tasks?status=archived"),
+  ]);
+}
+
 export function usePrefs() {
   return useSWR<UserPrefs, Error>("/prefs", fetcher);
 }
@@ -36,7 +48,7 @@ export async function deleteTask(id: string) {
  */
 export async function completeTask(id: string) {
   await apiClient.post(`/tasks/${id}/complete`);
-  await mutate("/tasks");
+  await invalidateTaskLists();
 }
 
 /**
@@ -44,7 +56,7 @@ export async function completeTask(id: string) {
  */
 export async function undoCompleteTask(id: string) {
   await apiClient.delete(`/tasks/${id}/complete`);
-  await mutate("/tasks");
+  await invalidateTaskLists();
 }
 
 export async function addSubtask(taskId: string, title: string) {

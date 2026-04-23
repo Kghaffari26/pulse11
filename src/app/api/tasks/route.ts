@@ -58,15 +58,32 @@ async function hydrateTasks(rows: Record<string, unknown>[]): Promise<Task[]> {
   }));
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const gate = await requireUserId();
   if (gate instanceof NextResponse) return gate;
   const userId = gate;
 
-  const rows = await queryInternalDatabase(
-    `SELECT * FROM pulse_tasks WHERE user_email = $1 ORDER BY deadline ASC`,
-    [userId],
-  );
+  const url = new URL(req.url);
+  const statusFilter = url.searchParams.get("status");
+
+  let query: string;
+  if (statusFilter === "archived") {
+    // Archived list: only completed, reverse-chrono by completed_at.
+    // NULLS LAST guards against any legacy 'done' rows without a completed_at.
+    query = `SELECT * FROM pulse_tasks
+             WHERE user_email = $1
+               AND (status = 'completed' OR status = 'done')
+             ORDER BY completed_at DESC NULLS LAST, updated_at DESC`;
+  } else if (statusFilter === "active") {
+    query = `SELECT * FROM pulse_tasks
+             WHERE user_email = $1
+               AND status <> 'completed' AND status <> 'done'
+             ORDER BY deadline ASC`;
+  } else {
+    query = `SELECT * FROM pulse_tasks WHERE user_email = $1 ORDER BY deadline ASC`;
+  }
+
+  const rows = await queryInternalDatabase(query, [userId]);
   const tasks = await hydrateTasks(rows);
   return NextResponse.json(tasks);
 }
