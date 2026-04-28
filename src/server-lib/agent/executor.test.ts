@@ -1,6 +1,7 @@
-import { runAgentJob } from "./executor";
+import { parsePlan, runAgentJob } from "./executor";
 import type { JobStatusPatch, JobsStore } from "./jobs-store";
 import type { AgentJob, AgentJobStatus, AgentStep } from "@/shared/models/ai";
+import type { AgentToolContext } from "./tools";
 
 function inMemoryJobsStore(initial: Partial<AgentJob>): JobsStore & { job: AgentJob } {
   const job: AgentJob = {
@@ -148,5 +149,97 @@ describe("runAgentJob", () => {
     const generate = async () => "whatever";
     await runAgentJob("nonexistent", { jobsStore: store, generate });
     expect(store.job.status).toBe("queued");
+  });
+
+  test("dispatches a tool step instead of calling generate for that step", async () => {
+    const store = inMemoryJobsStore({ context: { projectId: "p-1" } });
+    let call = 0;
+    const generate = async () => {
+      call++;
+      if (call === 1) {
+        return JSON.stringify([
+          { step: "Survey the syllabus", tool: "extract_tasks_from_file", args: { fileId: "f-1" } },
+          "Reflect on extracted tasks",
+          "Suggest priorities",
+        ]);
+      }
+      return `text output ${call - 1}`;
+    };
+    const toolCalls: Array<{ name: string; args: Record<string, unknown>; ctx: AgentToolContext }> = [];
+    const runTool = async (
+      name: string,
+      args: Record<string, unknown>,
+      ctx: AgentToolContext,
+    ): Promise<string> => {
+      toolCalls.push({ name, args, ctx });
+      return "tool produced 7 tasks";
+    };
+
+    await runAgentJob("job-1", { jobsStore: store, generate, runTool });
+
+    expect(store.job.status).toBe("completed");
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0].name).toBe("extract_tasks_from_file");
+    expect(toolCalls[0].args.fileId).toBe("f-1");
+    // projectId is auto-injected from job.context when the planner omits it.
+    expect(toolCalls[0].args.projectId).toBe("p-1");
+    expect(toolCalls[0].ctx.userId).toBe("u-1");
+    expect(toolCalls[0].ctx.projectId).toBe("p-1");
+    expect(store.job.steps[0].output).toBe("tool produced 7 tasks");
+    // Two text steps remain — planner + 2 text generations = 3 calls.
+    expect(call).toBe(3);
+  });
+
+  test("tool failure marks the job failed with the tool's error", async () => {
+    const store = inMemoryJobsStore({ context: { projectId: "p-1" } });
+    const generate = async () =>
+      JSON.stringify([
+        { step: "Run the tool", tool: "summarize_file", args: { fileId: "f-1" } },
+        "Reflect",
+        "Wrap up",
+      ]);
+    const runTool = async (): Promise<string> => {
+      throw new Error("file not accessible");
+    };
+    await runAgentJob("job-1", { jobsStore: store, generate, runTool });
+    expect(store.job.status).toBe("failed");
+    expect(store.job.error).toBe("file not accessible");
+    expect(store.job.steps[0].status).toBe("failed");
+  });
+});
+
+describe("parsePlan", () => {
+  test("string array still parses (Wave 4A back-compat)", () => {
+    const out = parsePlan('["a","b","c"]');
+    expect(out).toEqual([{ step: "a" }, { step: "b" }, { step: "c" }]);
+  });
+
+  test("object form preserves tool + args", () => {
+    const raw = JSON.stringify([
+      { step: "do a thing", tool: "summarize_file", args: { fileId: "x" } },
+      "plain step",
+    ]);
+    const out = parsePlan(raw);
+    expect(out).toEqual([
+      { step: "do a thing", tool: "summarize_file", args: { fileId: "x" } },
+      { step: "plain step" },
+    ]);
+  });
+
+  test("strips fenced output and tolerates surrounding prose", () => {
+    const raw = "Sure! Here's the plan:\n```json\n[\"a\",\"b\",\"c\"]\n```\nLet me know.";
+    const out = parsePlan(raw);
+    expect(out).toEqual([{ step: "a" }, { step: "b" }, { step: "c" }]);
+  });
+
+  test("falls back to numbered-list parsing when JSON fails", () => {
+    const out = parsePlan("1. first\n2. second\n3. third");
+    expect(out).toEqual([{ step: "first" }, { step: "second" }, { step: "third" }]);
+  });
+
+  test("drops object items missing a step field", () => {
+    const raw = JSON.stringify([{ tool: "x" }, { step: "valid" }, ""]);
+    const out = parsePlan(raw);
+    expect(out).toEqual([{ step: "valid" }]);
   });
 });
