@@ -185,6 +185,47 @@ describe("handleChatTurn", () => {
     expect(occurrences).toBe(1);
   });
 
+  it("persists context_used.failed onto the assistant message when files fail extraction", async () => {
+    const { store, inserted } = makeStore();
+    const generate = jest.fn().mockResolvedValue({
+      ok: true,
+      text: "I couldn't see the PDF, but here's what I have.",
+      provider: "gemini",
+      tier: "byok",
+      model: "gemini-2.5-pro",
+    } as AiGenerateResult);
+
+    const failedBuildContext: typeof import("./chat-context").buildChatContext = (async () => ({
+      contextBlock: "(No files or notes attached to this project yet.)",
+      used: {
+        files: [],
+        notes: [],
+        failed: [{ filename: "declaration.pdf", reason: "Setting up fake worker failed" }],
+      },
+    })) as unknown as typeof import("./chat-context").buildChatContext;
+
+    const res = await handleChatTurn({
+      projectId: "p1",
+      userId: "u1",
+      message: "What does the PDF say?",
+      deps: {
+        chatStore: store,
+        generate,
+        loadFiles: async () => [],
+        loadNotes: async () => [],
+        buildContext: failedBuildContext,
+      },
+    });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(inserted[1]?.contextUsed).toEqual({
+      files: [],
+      notes: [],
+      failed: [{ filename: "declaration.pdf", reason: "Setting up fake worker failed" }],
+    });
+  });
+
   it("invokes loaders with project + user scope", async () => {
     const { store } = makeStore();
     const loadFiles = jest.fn().mockResolvedValue([]);

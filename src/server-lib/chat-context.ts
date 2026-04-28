@@ -1,5 +1,6 @@
 import {
   CHAT_CONTEXT_MAX_CHARS,
+  type ChatContextFailedFile,
   type ChatContextUsed,
   type ChatMessage,
 } from "@/shared/models/chat";
@@ -58,11 +59,17 @@ export async function buildChatContext(
   const extract = deps.extract ?? extractText;
   const logWarn = deps.logWarn ?? ((m) => console.warn(m));
 
-  // Files: extract text in parallel; collect successful renderings.
+  const failed: ChatContextFailedFile[] = [];
+
+  // Files: extract text in parallel; collect successful renderings, capture
+  // failures (so the UI can show "Couldn't read: X" rather than dropping
+  // silently — the most common smoke-test bug otherwise).
   const fileResults = await Promise.all(
     files.map(async (f): Promise<RenderedItem | null> => {
       if (!f.mimeType) {
-        logWarn(`[chat-context] skipping ${f.filename}: missing mime type`);
+        const reason = "missing mime type";
+        logWarn(`[chat-context] skipping ${f.filename}: ${reason}`);
+        failed.push({ filename: f.filename, reason });
         return null;
       }
       try {
@@ -78,6 +85,7 @@ export async function buildChatContext(
       } catch (err) {
         const reason = err instanceof ExtractionError ? err.reason : (err as Error).message;
         logWarn(`[chat-context] skipping ${f.filename}: ${reason}`);
+        failed.push({ filename: f.filename, reason });
         return null;
       }
     }),
@@ -132,6 +140,9 @@ export async function buildChatContext(
     notes: included
       .filter((i) => i.kind === "note")
       .map((i) => ({ id: i.id, title: (i.meta.title ?? "").trim() || "(untitled)" })),
+    // Only include `failed` when there's something to report — keeps the
+    // common-case JSONB row + existing test fixtures unchanged.
+    ...(failed.length > 0 ? { failed } : {}),
   };
 
   return { contextBlock, used };

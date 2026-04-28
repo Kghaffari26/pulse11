@@ -11,14 +11,23 @@ export interface ChatContextSourceNote {
   title: string;
 }
 
+export interface ChatContextFailedFile {
+  filename: string;
+  reason: string;
+}
+
 /**
  * Stored on each assistant message so the UI can show "Used N files, M notes"
  * and let the user expand to see the source list — without re-running the
- * prompt or holding all the context in memory.
+ * prompt or holding all the context in memory. `failed` is only present when
+ * one or more files couldn't be parsed (e.g., corrupted PDF, unsupported
+ * mime), so the user gets a visible signal instead of the file silently
+ * missing from the context.
  */
 export interface ChatContextUsed {
   files: ChatContextSourceFile[];
   notes: ChatContextSourceNote[];
+  failed?: ChatContextFailedFile[];
 }
 
 export interface ChatMessage {

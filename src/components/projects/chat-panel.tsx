@@ -269,6 +269,7 @@ function MessageBubble({
   const ctx = message.contextUsed;
   const fileN = ctx?.files.length ?? 0;
   const noteN = ctx?.notes.length ?? 0;
+  const failedFiles = ctx?.failed ?? [];
   const hasFooter = !isUser && ctx !== null;
 
   return (
@@ -296,6 +297,11 @@ function MessageBubble({
               Used {fileN} {fileN === 1 ? "file" : "files"}, {noteN}{" "}
               {noteN === 1 ? "note" : "notes"}
             </button>
+            {failedFiles.length > 0 && (
+              <p className="mt-1 text-destructive/80">
+                Couldn&apos;t read: {failedFiles.map((f) => f.filename).join(", ")}
+              </p>
+            )}
             {expanded && ctx && (
               <ul className="mt-1.5 space-y-0.5 pl-3.5 text-muted-foreground">
                 {ctx.files.map((f) => (
@@ -309,7 +315,16 @@ function MessageBubble({
                     <StickyNote className="h-3 w-3" /> {n.title}
                   </li>
                 ))}
-                {fileN === 0 && noteN === 0 && (
+                {failedFiles.map((f) => (
+                  <li key={`failed-${f.filename}`} className="flex items-start gap-1 text-destructive/80">
+                    <FileText className="mt-0.5 h-3 w-3 shrink-0" />
+                    <span>
+                      <span className="font-medium">{f.filename}</span>
+                      <span className="ml-1 text-destructive/60">— {f.reason}</span>
+                    </span>
+                  </li>
+                ))}
+                {fileN === 0 && noteN === 0 && failedFiles.length === 0 && (
                   <li className="italic">No project context was attached.</li>
                 )}
               </ul>

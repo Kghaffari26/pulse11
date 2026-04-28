@@ -124,6 +124,75 @@ describe("buildChatContext", () => {
     expect(contextBlock).toContain("No files or notes attached");
     expect(used.files).toEqual([]);
     expect(used.notes).toEqual([]);
+    expect(used.failed).toBeUndefined();
+  });
+
+  describe("failure surfacing", () => {
+    it("captures extraction failures into used.failed (not silently dropped)", async () => {
+      const extract = jest
+        .fn()
+        .mockRejectedValue(new ExtractionError("declaration.pdf", "Setting up fake worker failed"));
+      const { used } = await buildChatContext(
+        [file({ id: "f1", filename: "declaration.pdf" })],
+        [],
+        { extract, logWarn: () => {} },
+      );
+      expect(used.files).toEqual([]);
+      expect(used.failed).toEqual([
+        { filename: "declaration.pdf", reason: "Setting up fake worker failed" },
+      ]);
+    });
+
+    it("captures missing-mime-type as a failure too", async () => {
+      const { used } = await buildChatContext(
+        [file({ id: "f1", filename: "mystery", mimeType: null })],
+        [],
+        { logWarn: () => {} },
+      );
+      expect(used.failed).toEqual([{ filename: "mystery", reason: "missing mime type" }]);
+    });
+
+    it("omits used.failed when every file succeeded (keeps the JSONB row clean)", async () => {
+      const extract = jest.fn().mockResolvedValue({ text: "ok", truncated: false });
+      const { used } = await buildChatContext(
+        [file({ id: "f1", filename: "good.pdf" })],
+        [],
+        { extract },
+      );
+      expect(used.failed).toBeUndefined();
+    });
+
+    it("captures multiple failures in order", async () => {
+      const extract = jest
+        .fn()
+        .mockRejectedValueOnce(new ExtractionError("a.pdf", "corrupt header"))
+        .mockResolvedValueOnce({ text: "good middle", truncated: false })
+        .mockRejectedValueOnce(new ExtractionError("c.pdf", "encrypted"));
+      const { used } = await buildChatContext(
+        [
+          file({ id: "f1", filename: "a.pdf" }),
+          file({ id: "f2", filename: "b.pdf" }),
+          file({ id: "f3", filename: "c.pdf" }),
+        ],
+        [],
+        { extract, logWarn: () => {} },
+      );
+      expect(used.files.map((f) => f.id)).toEqual(["f2"]);
+      expect(used.failed).toEqual([
+        { filename: "a.pdf", reason: "corrupt header" },
+        { filename: "c.pdf", reason: "encrypted" },
+      ]);
+    });
+
+    it("captures non-ExtractionError failures with their message", async () => {
+      const extract = jest.fn().mockRejectedValue(new Error("network reset"));
+      const { used } = await buildChatContext(
+        [file({ id: "f1", filename: "net.pdf" })],
+        [],
+        { extract, logWarn: () => {} },
+      );
+      expect(used.failed).toEqual([{ filename: "net.pdf", reason: "network reset" }]);
+    });
   });
 });
 
