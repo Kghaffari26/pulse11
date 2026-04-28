@@ -1,8 +1,9 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Flame } from "lucide-react";
 import Link from "next/link";
 import { authClient, getAuthActiveOrganization, getAuthClient } from "@/client-lib/auth-client";
+import { useProjects } from "@/client-lib/projects-client";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -26,12 +27,19 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { NAV_SECTIONS } from "@/config/nav-links";
+import { NAV_SECTIONS, SETTINGS_LINK, type NavSection } from "@/config/nav-links";
 
 export function Sidebar() {
   const { data: session } = getAuthClient();
   const { data: activeOrganization } = getAuthActiveOrganization();
   const { state } = useSidebar();
+  const { data: projectsData } = useProjects();
+  // Empty state for the Projects section — only when the user is signed in
+  // and the data has loaded. While loading we render the section without the
+  // empty-state line so it doesn't flash on every navigation.
+  const hasZeroProjects =
+    !!session && Array.isArray(projectsData) && projectsData.filter((p) => !p.archived).length === 0;
+
   const handleSignOut = async () => {
     await authClient.signOut({
       fetchOptions: {
@@ -41,6 +49,7 @@ export function Sidebar() {
       },
     });
   };
+
   return (
     <SidebarPrimitive collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border">
@@ -48,38 +57,43 @@ export function Sidebar() {
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <SidebarTrigger className="shrink-0" />
             {state === "expanded" && (
-              <span className="font-semibold text-sidebar-foreground truncate">
-                {process.env.NEXT_PUBLIC_APP_NAME || "Internal App"}
-              </span>
+              <Link href="/" className="flex items-center gap-2 min-w-0">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-foreground text-background">
+                  <Flame className="h-3.5 w-3.5" />
+                </span>
+                <span className="font-semibold tracking-tight text-sidebar-foreground truncate">
+                  Pulse
+                </span>
+              </Link>
             )}
           </div>
           {state === "expanded" && <ThemeToggle />}
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="gap-0">
         {NAV_SECTIONS.map((section, idx) => (
-          <SidebarGroup key={section.label ?? `section-${idx}`}>
-            {section.label && <SidebarGroupLabel>{section.label}</SidebarGroupLabel>}
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {section.links.map((link) => (
-                  <SidebarMenuItem key={link.href}>
-                    <SidebarMenuButton asChild>
-                      <Link href={link.href}>
-                        <link.icon />
-                        <span>{link.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          <NavSectionGroup
+            key={section.label}
+            section={section}
+            isFirst={idx === 0}
+            showProjectsEmptyState={section.kind === "projects" && hasZeroProjects}
+          />
         ))}
       </SidebarContent>
       {session && (
         <SidebarFooter className="border-t border-sidebar-border">
           <SidebarMenu>
+            {/* Settings was previously in the main nav. Moved here so it's
+                close to the account controls — a more conventional place for
+                a "preferences" link than alongside Tasks/Calendar. */}
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild size="sm" className="text-sidebar-foreground/80">
+                <Link href={SETTINGS_LINK.href}>
+                  <SETTINGS_LINK.icon />
+                  <span>{SETTINGS_LINK.label}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild className="w-full outline-none">
@@ -125,5 +139,40 @@ export function Sidebar() {
         </SidebarFooter>
       )}
     </SidebarPrimitive>
+  );
+}
+
+interface NavSectionGroupProps {
+  section: NavSection;
+  isFirst: boolean;
+  showProjectsEmptyState: boolean;
+}
+
+function NavSectionGroup({ section, isFirst, showProjectsEmptyState }: NavSectionGroupProps) {
+  return (
+    <SidebarGroup className={isFirst ? undefined : "pt-4"}>
+      <SidebarGroupLabel className="px-2 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+        {section.label}
+      </SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {section.links.map((link) => (
+            <SidebarMenuItem key={link.href}>
+              <SidebarMenuButton asChild>
+                <Link href={link.href}>
+                  <link.icon />
+                  <span>{link.label}</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+          {showProjectsEmptyState && (
+            <li className="px-2 pt-1 pl-9 text-xs italic text-sidebar-foreground/50">
+              No projects yet
+            </li>
+          )}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
   );
 }

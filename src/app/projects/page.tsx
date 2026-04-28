@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Archive, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,11 +33,33 @@ function extractError(err: unknown): string | null {
 }
 
 export default function ProjectsPage() {
+  // Suspense wraps the inner component because useSearchParams() opts the
+  // page out of static prerendering otherwise (Next.js App Router).
+  return (
+    <Suspense fallback={null}>
+      <ProjectsPageInner />
+    </Suspense>
+  );
+}
+
+function ProjectsPageInner() {
   const [createOpen, setCreateOpen] = useState(false);
   const { data, isLoading } = useProjects({ includeArchived: true });
   const projects = data ?? [];
   const active = projects.filter((p) => !p.archived);
   const archived = projects.filter((p) => p.archived);
+
+  // Sidebar's "New project" link points at /projects?new=true so it can open
+  // the create modal directly. We strip the param after consuming it so the
+  // dialog isn't re-triggered when the user closes it without navigating.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("new") === "true") {
+      setCreateOpen(true);
+      router.replace("/projects");
+    }
+  }, [searchParams, router]);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">

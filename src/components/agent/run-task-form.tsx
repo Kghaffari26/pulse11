@@ -20,6 +20,13 @@ import { AGENT_GOAL_MAX } from "@/shared/models/ai";
 
 const NO_PROJECT = "__none";
 
+const EXAMPLE_PROMPTS: ReadonlyArray<string> = [
+  "Extract assignments from my syllabus",
+  "Summarize my reading",
+  "Build a study plan for this project",
+  "Plan my week",
+];
+
 export function RunTaskForm() {
   const [goal, setGoal] = useState("");
   const [projectId, setProjectId] = useState<string>(NO_PROJECT);
@@ -83,6 +90,19 @@ export function RunTaskForm() {
               <label htmlFor="goal" className="text-sm font-medium">
                 Goal
               </label>
+              <div className="flex flex-wrap gap-1.5">
+                {EXAMPLE_PROMPTS.map((ex) => (
+                  <button
+                    key={ex}
+                    type="button"
+                    onClick={() => setGoal(ex)}
+                    className="inline-flex items-center gap-1.5 rounded-full border bg-muted/60 px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    {ex}
+                  </button>
+                ))}
+              </div>
               <Textarea
                 id="goal"
                 value={goal}
@@ -91,9 +111,11 @@ export function RunTaskForm() {
                 rows={4}
                 className="resize-none"
               />
-              <div className="text-right text-xs text-muted-foreground">
-                {goal.length} / {AGENT_GOAL_MAX}
-              </div>
+              {goal.length > 0 && (
+                <div className="text-right text-xs text-muted-foreground">
+                  {goal.length} / {AGENT_GOAL_MAX}
+                </div>
+              )}
             </div>
           </AILocked>
 

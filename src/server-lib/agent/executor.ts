@@ -143,7 +143,11 @@ export async function runAgentJob(jobId: string, deps: ExecutorDeps = {}): Promi
       return;
     }
 
-    const steps: AgentStep[] = planned.map((p) => ({ step: p.step, status: "pending" }));
+    const steps: AgentStep[] = planned.map((p) => ({
+      step: p.step,
+      status: "pending",
+      ...(p.tool ? { tool: p.tool } : {}),
+    }));
     await jobsStore.setSteps(jobId, steps);
 
     const toolCtx: AgentToolContext = {
