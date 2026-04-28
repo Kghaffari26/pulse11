@@ -8,6 +8,8 @@ import { Sidebar } from "@/components/Sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { CommandPaletteProvider } from "@/components/search/command-palette";
+import { SearchTrigger } from "@/components/search/search-trigger";
 import { NAV_LINKS } from "@/config/nav-links";
 
 const ElementSelector = lazy(() =>
@@ -36,28 +38,36 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <html lang="en" suppressHydrationWarning className={`${inter.className}`}>
         <body className="min-h-screen" suppressHydrationWarning>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-            {NAV_LINKS.length >= 2 ? (
-              <SidebarProvider>
-                <Sidebar />
-                <SidebarInset>
-                  <div className="flex items-center justify-end gap-2 border-b px-4 py-2">
+            <CommandPaletteProvider>
+              {NAV_LINKS.length >= 2 ? (
+                <SidebarProvider>
+                  <Sidebar />
+                  <SidebarInset>
+                    <div className="flex items-center justify-between gap-2 border-b px-4 py-2">
+                      <SignedIn>
+                        <SearchTrigger />
+                      </SignedIn>
+                      <SignedIn>
+                        <UserButton afterSignOutUrl="/sign-in" />
+                      </SignedIn>
+                    </div>
+                    <main className="flex-1 p-4">{children}</main>
+                  </SidebarInset>
+                </SidebarProvider>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between gap-2 border-b px-4 py-2">
+                    <SignedIn>
+                      <SearchTrigger />
+                    </SignedIn>
                     <SignedIn>
                       <UserButton afterSignOutUrl="/sign-in" />
                     </SignedIn>
                   </div>
                   <main className="flex-1 p-4">{children}</main>
-                </SidebarInset>
-              </SidebarProvider>
-            ) : (
-              <>
-                <div className="flex items-center justify-end gap-2 border-b px-4 py-2">
-                  <SignedIn>
-                    <UserButton afterSignOutUrl="/sign-in" />
-                  </SignedIn>
-                </div>
-                <main className="flex-1 p-4">{children}</main>
-              </>
-            )}
+                </>
+              )}
+            </CommandPaletteProvider>
             <Toaster richColors />
             <ElementSelector />
           </ThemeProvider>
