@@ -13,10 +13,14 @@ export type AiAssistResult =
   | { ok: true; text: string; provider: "gemini" | "openai"; error?: undefined; status?: undefined }
   | { ok: false; status: number; error: string; text?: undefined; provider?: undefined };
 
+export type GeminiModel = "gemini-2.5-flash" | "gemini-2.5-pro";
+
 export interface AiAssistConfig {
   geminiKey?: string;
   openaiKey?: string;
   prompt: string;
+  /** Defaults to gemini-2.5-flash. BYOK callers pass gemini-2.5-pro. */
+  geminiModel?: GeminiModel;
   fetchFn?: typeof fetch;
   sleepFn?: (ms: number) => Promise<void>;
 }
@@ -75,8 +79,9 @@ async function callGeminiOnce(
   apiKey: string,
   prompt: string,
   fetchFn: typeof fetch,
+  model: GeminiModel = "gemini-2.5-flash",
 ): Promise<ProviderOutcome> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(
     apiKey,
   )}`;
   try {
@@ -156,12 +161,13 @@ export async function aiAssist(cfg: AiAssistConfig): Promise<AiAssistResult> {
   const errors: string[] = [];
 
   if (cfg.geminiKey) {
-    let first = await callGeminiOnce(cfg.geminiKey, cfg.prompt, fetchFn);
+    const model = cfg.geminiModel ?? "gemini-2.5-flash";
+    let first = await callGeminiOnce(cfg.geminiKey, cfg.prompt, fetchFn, model);
     if (first.ok) return { ok: true, text: first.text, provider: "gemini" };
     errors.push(first.error);
     if (first.retryable) {
       await sleepFn(BACKOFF_MS);
-      const second = await callGeminiOnce(cfg.geminiKey, cfg.prompt, fetchFn);
+      const second = await callGeminiOnce(cfg.geminiKey, cfg.prompt, fetchFn, model);
       if (second.ok) return { ok: true, text: second.text, provider: "gemini" };
       errors.push(second.error);
     }
