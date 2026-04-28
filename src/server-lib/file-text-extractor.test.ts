@@ -20,6 +20,31 @@ function makeFetch(buf: Buffer | null, status = 200): typeof fetch {
   }) as typeof fetch;
 }
 
+function buildMinimalPdf(text: string): Buffer {
+  const objs: Record<number, string> = {
+    1: "<< /Type /Catalog /Pages 2 0 R >>",
+    2: "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+    3: "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    5: "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  };
+  const stream = `BT /F1 24 Tf 72 720 Td (${text}) Tj ET`;
+  objs[4] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+
+  let body = "%PDF-1.4\n%\xe2\xe3\xcf\xd3\n";
+  const offsets: Record<number, number> = {};
+  for (const id of [1, 2, 3, 4, 5]) {
+    offsets[id] = Buffer.byteLength(body, "binary");
+    body += `${id} 0 obj\n${objs[id]}\nendobj\n`;
+  }
+  const xrefOffset = Buffer.byteLength(body, "binary");
+  body += "xref\n0 6\n0000000000 65535 f \n";
+  for (const id of [1, 2, 3, 4, 5]) {
+    body += `${offsets[id].toString().padStart(10, "0")} 00000 n \n`;
+  }
+  body += `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return Buffer.from(body, "binary");
+}
+
 describe("file-text-extractor", () => {
   describe("plain text", () => {
     it("extracts text/plain content", async () => {
@@ -78,6 +103,21 @@ describe("file-text-extractor", () => {
         }),
       ).rejects.toThrow(/syllabus.pdf.*not a valid PDF/);
     });
+
+    // Integration test that exercises the real unpdf-backed default parser.
+    // The original VYBE-605 smoke-test bug was invisible to the dependency-
+    // injected tests above because they never invoked the real PDF library.
+    // This builds a tiny synthetic PDF and runs it through extractText with
+    // no parsePdf override, so a regression in the default parser path or its
+    // serverless trace would fail this test.
+    it("extracts text from a real PDF using the default unpdf parser", async () => {
+      const pdf = buildMinimalPdf("Hello unpdf integration");
+      const result = await extractText("https://blob/real.pdf", "application/pdf", "real.pdf", {
+        fetchFn: makeFetch(pdf),
+      });
+      expect(result.text).toContain("Hello unpdf integration");
+      expect(result.truncated).toBe(false);
+    }, 15_000);
   });
 
   describe("DOCX", () => {

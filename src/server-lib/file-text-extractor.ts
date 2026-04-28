@@ -1,6 +1,6 @@
 /**
  * Server-side text extraction for project files used as AI chat context.
- * Supports plain text, markdown, PDF (pdf-parse 2.x), and DOCX (mammoth).
+ * Supports plain text, markdown, PDF (unpdf), and DOCX (mammoth).
  *
  * Output is capped at MAX_EXTRACTED_CHARS per file; callers should treat
  * `truncated: true` as a signal that the file may have additional content.
@@ -44,16 +44,13 @@ export const SUPPORTED_MIME_TYPES = [
 ] as const;
 
 async function defaultParsePdf(buf: Buffer): Promise<string> {
-  // Dynamic import so the heavyweight pdf-parse / pdfjs deps are loaded
-  // lazily only when a PDF actually needs parsing.
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: buf });
-  try {
-    const result = await parser.getText();
-    return result.text;
-  } finally {
-    await parser.destroy();
-  }
+  // unpdf ships a serverless-tuned pdfjs build with no worker file or native
+  // assets, so NFT can trace the full module graph and the parser runs end-to-
+  // end in a Vercel function. Dynamic import keeps the dep lazy.
+  const { extractText } = await import("unpdf");
+  const data = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  const result = await extractText(data, { mergePages: true });
+  return result.text;
 }
 
 async function defaultParseDocx(buf: Buffer): Promise<string> {
