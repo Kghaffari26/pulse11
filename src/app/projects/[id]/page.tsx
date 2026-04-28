@@ -10,6 +10,7 @@ import { useProject } from "@/client-lib/projects-client";
 import { NotesPanel } from "@/components/projects/notes-panel";
 import { FilesPanel } from "@/components/projects/files-panel";
 import { ProjectTasksPanel } from "@/components/projects/project-tasks-panel";
+import { ChatPanel } from "@/components/projects/chat-panel";
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -65,6 +66,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <TabsTrigger value="notes">Notes</TabsTrigger>
               <TabsTrigger value="tasks">Tasks</TabsTrigger>
               <TabsTrigger value="files">Files</TabsTrigger>
+              <TabsTrigger value="chat">Chat</TabsTrigger>
             </TabsList>
             <TabsContent value="notes" className="pt-4">
               <NotesPanel projectId={project.id} />
@@ -74,6 +76,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </TabsContent>
             <TabsContent value="files" className="pt-4">
               <FilesPanel projectId={project.id} />
+            </TabsContent>
+            <TabsContent value="chat" className="pt-4">
+              <ChatPanel projectId={project.id} />
             </TabsContent>
           </Tabs>
         </>
