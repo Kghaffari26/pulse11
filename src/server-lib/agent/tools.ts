@@ -8,6 +8,10 @@
 
 import { aiGenerate } from "@/server-lib/ai-generate";
 
+import { extractTasksTool } from "./tools/extract-tasks";
+import { summarizeFileTool } from "./tools/summarize-file";
+import { generateStudyPlanTool } from "./tools/generate-study-plan";
+
 export interface AgentToolContext {
   userId: string;
   /** Project id available when the job context carried one. Tools that
@@ -23,8 +27,11 @@ export interface AgentTool {
   run: (args: Record<string, unknown>, ctx: AgentToolContext) => Promise<string>;
 }
 
-/** Concrete tools register here; Wave 4B-2 lands the first three. */
-export const AGENT_TOOLS: ReadonlyArray<AgentTool> = [];
+export const AGENT_TOOLS: ReadonlyArray<AgentTool> = [
+  extractTasksTool,
+  summarizeFileTool,
+  generateStudyPlanTool,
+];
 
 export function getTool(name: string): AgentTool | undefined {
   return AGENT_TOOLS.find((t) => t.name === name);
