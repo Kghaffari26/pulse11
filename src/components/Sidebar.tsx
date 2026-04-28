@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Flame } from "lucide-react";
 import Link from "next/link";
 import { authClient, getAuthActiveOrganization, getAuthClient } from "@/client-lib/auth-client";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -48,9 +48,14 @@ export function Sidebar() {
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <SidebarTrigger className="shrink-0" />
             {state === "expanded" && (
-              <span className="font-semibold text-sidebar-foreground truncate">
-                {process.env.NEXT_PUBLIC_APP_NAME || "Internal App"}
-              </span>
+              <Link href="/" className="flex items-center gap-2 min-w-0">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-foreground text-background">
+                  <Flame className="h-3.5 w-3.5" />
+                </span>
+                <span className="font-semibold tracking-tight text-sidebar-foreground truncate">
+                  Pulse
+                </span>
+              </Link>
             )}
           </div>
           {state === "expanded" && <ThemeToggle />}
