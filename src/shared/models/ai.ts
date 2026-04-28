@@ -33,6 +33,10 @@ export interface AgentStep {
   step: string;
   status: "pending" | "running" | "completed" | "failed";
   output?: string;
+  /** Tool name when this step dispatched through AGENT_TOOLS; absent for
+   *  pure text-generation steps. Lets the UI branch on output rendering
+   *  (markdown prose for text, monospace for structured tool returns). */
+  tool?: string;
   startedAt?: string;
   completedAt?: string;
 }

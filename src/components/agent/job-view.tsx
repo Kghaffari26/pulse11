@@ -1,14 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   Check,
   ChevronDown,
   ChevronRight,
   CircleDashed,
+  Copy,
   Loader2,
   Slash,
+  Wrench,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -109,9 +113,22 @@ function StepList({ steps }: { steps: AgentStep[] }) {
 
 function StepRow({ index, step }: { index: number; step: AgentStep }) {
   const [open, setOpen] = useState(false);
-  const hasOutput = step.output && step.output.trim().length > 0;
+  const hasOutput = !!(step.output && step.output.trim().length > 0);
+  const isTool = !!step.tool;
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!step.output) return;
+    try {
+      await navigator.clipboard.writeText(step.output);
+      toast.success("Copied to clipboard");
+    } catch {
+      toast.error("Couldn't copy — clipboard unavailable");
+    }
+  };
+
   return (
-    <li className="rounded-md border bg-background">
+    <li className="group rounded-md border bg-background">
       <button
         type="button"
         onClick={() => hasOutput && setOpen((o) => !o)}
@@ -123,14 +140,37 @@ function StepRow({ index, step }: { index: number; step: AgentStep }) {
           <span className="text-xs text-muted-foreground mr-2">Step {index + 1}</span>
           {step.step}
         </span>
+        {isTool && (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            <Wrench className="h-2.5 w-2.5" />
+            {step.tool}
+          </span>
+        )}
         {hasOutput ? (
           open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />
         ) : null}
       </button>
       {open && hasOutput && (
-        <pre className="whitespace-pre-wrap break-words border-t bg-muted/30 px-3 py-2 text-xs">
-          {step.output}
-        </pre>
+        <div className="relative border-t bg-muted/30">
+          {!isTool && (
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background hover:text-foreground group-hover:opacity-100 focus:opacity-100"
+              aria-label="Copy step output"
+              title="Copy"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {isTool ? (
+            <pre className="whitespace-pre-wrap break-words px-3 py-2 text-xs">{step.output}</pre>
+          ) : (
+            <div className="prose prose-sm max-w-none px-3 py-2 text-sm dark:prose-invert prose-p:my-2 prose-headings:mb-2 prose-headings:mt-3 prose-headings:font-semibold prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
+              <ReactMarkdown>{step.output ?? ""}</ReactMarkdown>
+            </div>
+          )}
+        </div>
       )}
     </li>
   );
